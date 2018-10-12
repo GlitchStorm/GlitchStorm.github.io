@@ -3,10 +3,9 @@ var clickUpgradeAmount = 0;
 var clickUpgradeCost = 0;
 var clickValue = 1;
 
-window.onload = function(){
-	loadSave()
-};
-
+.//window.onload = function(){
+	//loadSave()
+//
 function moneyClick() {
 	var clickValue = clickUpgradeAmount + 1;
 	money = money + (clickValue * 1);
