@@ -4,4 +4,3 @@ function moneyClick(clickValue) {
 	money = money + clickValue;
 	document.getElementById('money').innerHTML = money;
 	}
-function
