@@ -1,10 +1,11 @@
 var	money = 0;
 var clickUpgradeAmount = 0;
+var printUpgradeAmount = 0;
 var clickUpgradeCost = 0;
 var clickValue = 1;
 
 window.onload = function(){
-	loadSave();
+	
 };
 
 function moneyClick() {
@@ -12,6 +13,11 @@ function moneyClick() {
 	money = money + (clickValue * 1);
 	document.getElementById('money').innerHTML = money;
 	}
+
+function moneyIdle(cashPerSecond){
+	money = money + cashPerSecond;
+	document.getElementById('money').innerHTML = money;
+}
 
 function upgradeClick(upgradeAmount){
 	var clickUpgradeCost = Math.floor(10 * Math.pow(1.1,clickUpgradeAmount));
@@ -23,6 +29,18 @@ function upgradeClick(upgradeAmount){
 	}
 	var nextClickUpgradeCost = Math.floor(10 * Math.pow(1.1,clickUpgradeAmount));
 	document.getElementById('clickUpgradeCost').innerHTML = nextClickUpgradeCost;
+}
+
+function upgradePrint(upgradeAmount){
+	var printUpgradeCost = Math.floor(10 * Math.pow(1.1,printUpgradeAmount));
+	if(money >= printUpgradeCost){
+		printUpgradeAmount = printUpgradeAmount + 1;
+		money = money - printUpgradeCost;
+		document.getElementById('printUpgradeAmount').innerHTML = printUpgradeAmount;
+		document.getElementById('money').innerHTML = money;
+	}
+	var nextPrintUpgradeCost = Math.floor(10 * Math.pow(1.1,printUpgradeAmount));
+	document.getElementById('printUpgradeCost').innerHTML = nextPrintUpgradeCost;
 }
 
 function loadSave(){
@@ -45,7 +63,7 @@ function autoSave(){
 	var save = {
 		money: money,
 		clickUpgradeAmount: clickUpgradeAmount,
-		nextClickUpgradeCost: clickUpgradeCost,
+		clickUpgradeCost: clickUpgradeCost,
 	};
 	localStorage.setItem("save",JSON.stringify(save));
 }
@@ -53,3 +71,8 @@ function autoSave(){
 window.setInterval(function(){
 	autoSave();
 }, 5000);
+
+window.setInterval(function(){
+	var idleIncomeTotal = printUpgradeAmount;
+	moneyIdle(idleIncomeTotal);
+}, 1000);

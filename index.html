@@ -11,14 +11,21 @@
             $<span id="money"></span>
         </div>
         <div class="m-2">
-            <button type="button" onclick="moneyClick()" class="btn btn-success">Handcraft Dollar Bill</button>
+            <button type="button" onclick="moneyClick(1)" class="btn btn-success">Handcraft Dollar Bill</button>
         </div>
         <div class="m-2">
             <button type="button" onclick="upgradeClick(1)" class="btn btn-success">Better Counterfeiting Skills</button>
         </div>
         <div class="m-2">
-            Skill Level: <span id="clickUpgradeAmount"></span>
-            Cost: $<span id="clickUpgradeCost"></span>
+            Skill Level: <span id="clickUpgradeAmount">0</span>
+            Cost: $<span id="clickUpgradeCost">10</span>
+        </div>
+        <div class="m-2">
+            <button type="button" onclick="upgradePrint(1)" class="btn btn-success">Money Printer</button>
+        </div>
+        <div class="m-2">
+            Skill Level: <span id="printUpgradeAmount">0</span>
+            Cost: $<span id="printUpgradeCost">1000</span>
         </div>
     </div>
 	<script type="text/javascript" src="main.js"></script>
