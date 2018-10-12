@@ -45,7 +45,7 @@ function autoSave(){
 	var save = {
 		money: money,
 		clickUpgradeAmount: clickUpgradeAmount,
-		clickUpgradeCost: clickUpgradeCost,
+		clickUpgradeCost: nextClickUpgradeCost,
 	};
 	localStorage.setItem("save",JSON.stringify(save));
 }
