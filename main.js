@@ -33,6 +33,9 @@ function loadSave(){
 	if (typeof savegame.clickUpgradeAmount !== "undefined") {
 		clickUpgradeAmount = savegame.clickUpgradeAmount;
 	}
+	document.getElementById('money').innerHTML = money;
+	document.getElementById('clickUpgradeCost').innerHTML = nextClickUpgradeCost;
+	document.getElementById('clickUpgradeAmount').innerHTML = clickUpgradeAmount;
 }
 
 function autoSave(){
