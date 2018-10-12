@@ -3,6 +3,10 @@ var clickUpgradeAmount = 0;
 var clickUpgradeCost = 0;
 var clickValue = 1;
 
+window.onload = function(){
+	loadSave()
+}
+
 function moneyClick() {
 	var clickValue = clickUpgradeAmount + 1;
 	money = money + (clickValue * 1);
@@ -20,3 +24,25 @@ function upgradeClick(upgradeAmount){
 	var nextClickUpgradeCost = Math.floor(10 * Math.pow(1.1,clickUpgradeAmount));
 	document.getElementById('clickUpgradeCost').innerHTML = nextClickUpgradeCost;
 };
+
+function loadSave(){
+	var savegame = JSON.parse(localStorage.getItem("save"));
+	if (typeof savegame.money !== "undefined") {
+		money = savegame.money;
+	}
+	if (typeof savegame.clickUpgradeAmount !== "undefined") {
+		clickUpgradeAmount = savegame.clickUpgradeAmount;
+	}
+};
+
+function autoSave(){
+	var save = {
+		money = money;
+		clickUpgradeAmount = clickUpgradeAmount;
+	}
+	localStorage.setItem("save",JSON.stringify(save));
+};
+
+window.setInterval(function(){
+	autoSave();
+}, 5000);
