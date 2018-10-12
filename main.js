@@ -11,7 +11,7 @@ function moneyClick() {
 	var clickValue = clickUpgradeAmount + 1;
 	money = money + (clickValue * 1);
 	document.getElementById('money').innerHTML = money;
-	};
+	}
 
 function upgradeClick(upgradeAmount){
 	var clickUpgradeCost = Math.floor(10 * Math.pow(1.1,clickUpgradeAmount));
@@ -20,10 +20,10 @@ function upgradeClick(upgradeAmount){
 		money = money - clickUpgradeCost;
 		document.getElementById('clickUpgradeAmount').innerHTML = clickUpgradeAmount;
 		document.getElementById('money').innerHTML = money;
-	};
+	}
 	var nextClickUpgradeCost = Math.floor(10 * Math.pow(1.1,clickUpgradeAmount));
 	document.getElementById('clickUpgradeCost').innerHTML = nextClickUpgradeCost;
-};
+}
 
 function loadSave(){
 	var savegame = JSON.parse(localStorage.getItem("save"));
@@ -33,15 +33,15 @@ function loadSave(){
 	if (typeof savegame.clickUpgradeAmount !== "undefined") {
 		clickUpgradeAmount = savegame.clickUpgradeAmount;
 	}
-};
+}
 
 function autoSave(){
 	var save = {
 		money: money,
 		clickUpgradeAmount: clickUpgradeAmount,
-	}
+	};
 	localStorage.setItem("save",JSON.stringify(save));
-};
+}
 
 window.setInterval(function(){
 	autoSave();
