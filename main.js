@@ -3,9 +3,10 @@ var clickUpgradeAmount = 0;
 var clickUpgradeCost = 0;
 var clickValue = 1;
 
-.//window.onload = function(){
-	//loadSave()
-//
+window.onload = function(){
+	loadSave();
+};
+
 function moneyClick() {
 	var clickValue = clickUpgradeAmount + 1;
 	money = money + (clickValue * 1);
@@ -35,12 +36,13 @@ function loadSave(){
 };
 
 function autoSave(){
-	alert("Saved");
 	var save = {
-		money = money;
-		clickUpgradeAmount = clickUpgradeAmount;
-	};
+		money: money,
+		clickUpgradeAmount: clickUpgradeAmount,
+	}
 	localStorage.setItem("save",JSON.stringify(save));
 };
 
-setInterval(autoSave(), 5000);
+window.setInterval(function(){
+	autoSave();
+}, 5000);
