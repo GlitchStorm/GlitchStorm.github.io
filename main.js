@@ -37,7 +37,7 @@ function loadSave(){
 		clickUpgradeCost = savegame.clickUpgradeCost;
 	}
 	document.getElementById('money').innerHTML = money;
-	document.getElementById('clickUpgradeCost').innerHTML = ClickUpgradeCost;
+	document.getElementById('clickUpgradeCost').innerHTML = clickUpgradeCost;
 	document.getElementById('clickUpgradeAmount').innerHTML = clickUpgradeAmount;
 }
 
