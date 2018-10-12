@@ -5,7 +5,7 @@ var clickValue = 1;
 
 window.onload = function(){
 	loadSave()
-}
+};
 
 function moneyClick() {
 	var clickValue = clickUpgradeAmount + 1;
@@ -36,13 +36,12 @@ function loadSave(){
 };
 
 function autoSave(){
+	alert("Saved");
 	var save = {
 		money = money;
 		clickUpgradeAmount = clickUpgradeAmount;
-	}
+	};
 	localStorage.setItem("save",JSON.stringify(save));
 };
 
-window.setInterval(function(){
-	autoSave();
-}, 5000);
+setInterval(autoSave(), 5000);
