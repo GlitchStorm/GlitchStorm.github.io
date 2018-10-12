@@ -33,8 +33,11 @@ function loadSave(){
 	if (typeof savegame.clickUpgradeAmount !== "undefined") {
 		clickUpgradeAmount = savegame.clickUpgradeAmount;
 	}
+	if (typeof savegame.clickUpgradeCost !== "undefined") {
+		clickUpgradeCost = savegame.clickUpgradeCost;
+	}
 	document.getElementById('money').innerHTML = money;
-	document.getElementById('clickUpgradeCost').innerHTML = nextClickUpgradeCost;
+	document.getElementById('clickUpgradeCost').innerHTML = ClickUpgradeCost;
 	document.getElementById('clickUpgradeAmount').innerHTML = clickUpgradeAmount;
 }
 
@@ -42,6 +45,7 @@ function autoSave(){
 	var save = {
 		money: money,
 		clickUpgradeAmount: clickUpgradeAmount,
+		clickUpgradeCost: clickUpgradeCost,
 	};
 	localStorage.setItem("save",JSON.stringify(save));
 }
