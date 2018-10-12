@@ -1,11 +1,12 @@
 var	money = 0;
 var clickUpgradeAmount = 0;
 var printUpgradeAmount = 0;
-var clickUpgradeCost = 0;
+var printUpgradeCost = 1000;
+var clickUpgradeCost = 10;
 var clickValue = 1;
 
 window.onload = function(){
-	
+	loadSave();
 };
 
 function moneyClick() {
@@ -54,9 +55,17 @@ function loadSave(){
 	if (typeof savegame.clickUpgradeCost !== "undefined") {
 		clickUpgradeCost = savegame.clickUpgradeCost;
 	}
+	if (typeof savegame.printUpgradeCost !== "undefined") {
+		printUpgradeCost = savegame.printUpgradeCost;
+	}
+	if (typeof savegame.printUpgradeAmount !== "undefined") {
+		printUpgradeAmount = savegame.printUpgradeAmount;
+	}
 	document.getElementById('money').innerHTML = money;
 	document.getElementById('clickUpgradeCost').innerHTML = clickUpgradeCost;
 	document.getElementById('clickUpgradeAmount').innerHTML = clickUpgradeAmount;
+	document.getElementById('printUpgradeAmount').innerHTML = printUpgradeAmount;
+	document.getElementById('printUpgradeCost').innerHTML = printUpgradeCost;
 }
 
 function autoSave(){
@@ -64,6 +73,8 @@ function autoSave(){
 		money: money,
 		clickUpgradeAmount: clickUpgradeAmount,
 		clickUpgradeCost: clickUpgradeCost,
+		printUpgradeAmount: printUpgradeAmount,
+		printUpgradeCost: printUpgradeCost,
 	};
 	localStorage.setItem("save",JSON.stringify(save));
 }
@@ -75,4 +86,5 @@ window.setInterval(function(){
 window.setInterval(function(){
 	var idleIncomeTotal = printUpgradeAmount;
 	moneyIdle(idleIncomeTotal);
+	document.title = "$" + money.toString();
 }, 1000);
