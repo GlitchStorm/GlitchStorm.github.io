@@ -1,7 +1,7 @@
 var	money = 0;
 var clickUpgradeAmount = 0;
 var printUpgradeAmount = 0;
-var printUpgradeCost = 1000;
+var printUpgradeCost = 100;
 var clickUpgradeCost = 10;
 var clickValue = 1;
 //triggers saveload on site open
@@ -33,7 +33,7 @@ function upgradeClick(upgradeAmount){
 }
 //function to handle idle upgrade button
 function upgradePrint(upgradeAmount){
-	var printUpgradeCost = Math.floor(10 * Math.pow(1.1,printUpgradeAmount));
+	var printUpgradeCost = Math.floor(100 * Math.pow(1.1,printUpgradeAmount));
 	if(money >= printUpgradeCost){
 		printUpgradeAmount = printUpgradeAmount + 1;
 		money = money - printUpgradeCost;
