@@ -1,0 +1,71 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Academy · Assignments</title><style>
+:root{color-scheme:dark;--bg:#0d1420;--panel:#1b2738;--text:#edf2fc;--muted:#b1bfd3;--accent:#7995ff}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,Arial}
+header{background:var(--panel);border-bottom:1px solid #35465e;padding:18px 24px}main{max-width:1110px;margin:20px auto;padding:0 14px}
+.panel{background:var(--panel);border:1px solid #35465e;border-radius:13px;padding:19px;margin:10px 0}
+.columns{display:grid;grid-template-columns:245px minmax(0,1fr);gap:12px}.muted{color:var(--muted)}h1{font-size:1.3rem;margin:0}h2{font-size:1.14rem;margin-top:0}
+button,input,textarea,select{font:inherit}button{border:1px solid #475675;border-radius:8px;background:#34445e;color:white;padding:9px 13px;cursor:pointer}
+button.primary{background:#526bc9}button:disabled{opacity:.4}input,textarea,select{background:#0e1928;color:white;border:1px solid #4e5b70;border-radius:7px;padding:10px;width:100%}textarea{min-height:170px;resize:vertical}
+label{display:block;margin-top:12px;font-weight:600}label input,label textarea{margin-top:5px}
+nav{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}nav button{padding:8px 0}nav button.active{outline:2px solid #dce6ff}nav button.done{background:#246458}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.card{padding:14px;background:#121e2e;border:1px solid #42516a;border-radius:10px}#editor,#finished{display:none}
+canvas{display:block;background:white;width:100%;height:230px;touch-action:none;border-radius:7px}#plot svg{background:white;border-radius:8px;width:100%;max-width:550px}
+pre{white-space:pre-wrap;word-break:break-word}small{color:var(--muted)}
+@media(max-width:770px){.columns{display:block}nav{grid-template-columns:repeat(10,1fr)}}
+</style></head><body><header><h1>Mechatronics Academy · Assignment Center</h1><small>Persistent exams, written work and academic tracking</small></header><main>
+<section class="panel"><h2>Connection</h2><p class="muted">Enter your deployed Worker URL. This version does not require authentication.</p><label>Worker base URL<input id="server" placeholder="https://mechatronics-academy.example.workers.dev"></label><div class="controls"><button class="primary" id="connect">Load academy</button><a href="./index.html" style="color:var(--accent)">Original MTH101 exam</a></div><p id="status" role="status"></p></section>
+<section class="panel" id="dashboard"><h2>Academic overview</h2><div id="stats" class="grid"></div><h2>Assigned assessments</h2><div id="assignments" class="grid"></div><h2>Course catalog</h2><div id="courses" class="grid"></div></section>
+<div class="columns" id="editor"><aside class="panel"><h2 id="examTitle">Assessment</h2><p id="answered" class="muted"></p><nav id="questionNav"></nav><div class="controls"><button id="download">Export draft</button><button class="primary" id="submit">Submit final answers</button></div><small>Answers are saved locally until submitted; submitted answers are stored in D1.</small></aside>
+<section class="panel"><h2 id="questionTitle"></h2><p id="prompt"></p><div id="plot"></div><label>Final answer<input id="answer" autocomplete="off"></label><label>Reasoning, equations and working<textarea id="working" placeholder="Show steps, justify assumptions and units."></textarea></label><label>Optional artifact reference or URL<input id="artifact" placeholder="Onshape / KiCad / drawing reference"></label><label>Handwritten calculations or sketch</label><canvas id="pad"></canvas><div class="controls"><button id="erase">Erase drawing</button><button id="prev">Previous</button><button id="next">Next</button></div></section></div>
+<section class="panel" id="finished"><h2>Exam submitted</h2><pre id="receipt"></pre><button id="home">Back to assignments</button></section>
+</main><script>
+(function(){
+"use strict";
+const el=id=>document.getElementById(id);
+let host="",catalog=[],assignments=[],assessment=null,assignment=null,index=0,answers={},drawing=false,last=null;
+const pad=el("pad"),ctx=pad.getContext("2d");
+const say=x=>el("status").textContent=x;
+async function api(op,data,method){const r=await fetch(host+"/api/v2/"+op,{method:method||"POST",headers:{"Content-Type":"application/json"},body:method==="GET"?undefined:JSON.stringify(data||{})});let v=await r.json();if(!r.ok)throw Error(v.error||"Request failed");return v}
+function make(tag,txt,parent){const x=document.createElement(tag);x.textContent=txt;parent.appendChild(x);return x}
+function clean(parent){parent.replaceChildren()}
+function backup(){return "academy-draft-"+assignment.id}
+function save(){if(!assessment||!assignment)return;const q=assessment.questions[index],a=answers[q.id]||{};a.answer=el("answer").value;a.work=el("working").value;a.artifact_ref=el("artifact").value;a.drawing=pad.toDataURL("image/png");answers[q.id]=a;localStorage.setItem(backup(),JSON.stringify(answers))}
+function sizeCanvas(){const w=pad.getBoundingClientRect().width;pad.width=w*devicePixelRatio;pad.height=230*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);ctx.fillStyle="white";ctx.fillRect(0,0,w,230);const src=answers[assessment.questions[index].id]?.drawing;if(src){let img=new Image();img.onload=()=>ctx.drawImage(img,0,0,w,230);img.src=src}}
+function diagram(q){
+ const target=el("plot");clean(target);const d=q.diagram;if(!d||d.type!=="cartesian")return;
+ const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("viewBox","0 0 500 330");svg.setAttribute("role","img");svg.setAttribute("aria-label","Cartesian graph with plotted data");
+ const bounds=d.bounds||{xmin:-5,xmax:5,ymin:-5,ymax:5};
+ const px=x=>45+(x-bounds.xmin)/(bounds.xmax-bounds.xmin)*415,py=y=>290-(y-bounds.ymin)/(bounds.ymax-bounds.ymin)*250;
+ const line=(x1,y1,x2,y2,color,width)=>{const l=document.createElementNS(svg.namespaceURI,"line");l.setAttribute("x1",x1);l.setAttribute("y1",y1);l.setAttribute("x2",x2);l.setAttribute("y2",y2);l.setAttribute("stroke",color);l.setAttribute("stroke-width",width);svg.appendChild(l)};
+ for(let i=0;i<=10;i++){line(45+i*41.5,40,45+i*41.5,290,"#dae0e7",1);line(45,40+i*25,460,40+i*25,"#dae0e7",1)}
+ line(px(0),40,px(0),290,"#243148",2);line(45,py(0),460,py(0),"#243148",2);
+ for(const series of d.series||[]){const pts=series.points||[];for(let i=1;i<pts.length;i++)line(px(pts[i-1][0]),py(pts[i-1][1]),px(pts[i][0]),py(pts[i][1]),"#315bd6",3);for(const p of pts){const dot=document.createElementNS(svg.namespaceURI,"circle");dot.setAttribute("cx",px(p[0]));dot.setAttribute("cy",py(p[1]));dot.setAttribute("r",4);dot.setAttribute("fill","#c53958");svg.appendChild(dot)}}
+ target.appendChild(svg);
+}
+function render(){const q=assessment.questions[index];el("examTitle").textContent=assessment.title;el("questionTitle").textContent="Question "+(index+1)+" / "+assessment.questions.length+" — "+q.title;el("prompt").textContent=q.prompt;el("answer").value=answers[q.id]?.answer||"";el("working").value=answers[q.id]?.work||"";el("artifact").value=answers[q.id]?.artifact_ref||"";diagram(q);
+ const nav=el("questionNav");clean(nav);let count=0;assessment.questions.forEach((item,i)=>{const done=!!(answers[item.id]?.answer||answers[item.id]?.work);if(done)count++;const b=make("button",String(i+1),nav);b.className=(index===i?"active ":"")+(done?"done":"");b.onclick=()=>step(i)});
+ el("answered").textContent=count+" / "+assessment.questions.length+" answered";el("prev").disabled=index===0;el("next").disabled=index===assessment.questions.length-1;requestAnimationFrame(sizeCanvas)}
+function step(n){save();index=n;render()}
+function download(o,name){const u=URL.createObjectURL(new Blob([JSON.stringify(o,null,2)],{type:"application/json"})),a=document.createElement("a");a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+async function openAssignment(id){try{assignment=assignments.find(a=>a.id===id);assessment=await api("get_assessment",{assessment_id:assignment.assessment_id});if(assessment.status!=="published")throw Error("Exam is not published");answers=JSON.parse(localStorage.getItem(backup())||"{}");index=0;el("editor").style.display="grid";el("finished").style.display="none";render();el("editor").scrollIntoView({behavior:"smooth"})}catch(e){say(e.message)}}
+async function overview(){const data=await api("academic_overview",{},"GET");catalog=data.courses;assignments=data.assignments;const stats=el("stats"),list=el("assignments"),cs=el("courses");clean(stats);clean(list);clean(cs);
+ for(const item of [data.credits_mastered+" / 128 credits",data.competencies.length+" defined competencies",data.submissions.length+" submissions",data.next_eligible.length+" eligible courses"]){const c=make("div",item,stats);c.className="card"}
+ for(const a of assignments){const c=document.createElement("div");c.className="card";make("strong",a.title,c);make("p",a.course_id+" · "+a.status,c);if(a.status==="assigned"){const b=make("button","Open assessment",c);b.onclick=()=>openAssignment(a.id)}list.appendChild(c)}
+ if(!assignments.length)make("p","No assignments yet. Ask your tutor to create, publish and assign a test using the academy tools.",list);
+ for(const c of catalog){const box=make("div",c.id+" · "+c.title,cs);box.className="card";make("small","Term "+c.term+" · "+c.credits+" credits · "+c.status,box)}
+}
+el("connect").onclick=async()=>{try{const u=new URL(el("server").value.trim().replace(/\/+$/,""));if(u.protocol!=="https:"&&u.hostname!=="localhost")throw Error("HTTPS URL required");host=u.origin+u.pathname.replace(/\/+$/,"");localStorage.setItem("academy-worker-url",host);await overview();say("Connected to academic record")}catch(e){say(e.message)}};
+el("server").value=localStorage.getItem("academy-worker-url")||"";
+for(const id of ["answer","working","artifact"])el(id).oninput=()=>save();
+el("prev").onclick=()=>step(Math.max(0,index-1));el("next").onclick=()=>step(Math.min(assessment.questions.length-1,index+1));
+function point(e){const r=pad.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}}
+pad.onpointerdown=e=>{drawing=true;pad.setPointerCapture(e.pointerId);last=point(e)};
+pad.onpointermove=e=>{if(!drawing)return;const p=point(e);ctx.strokeStyle="#1c2736";ctx.lineWidth=2;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p};
+pad.onpointerup=()=>{drawing=false;save()};
+el("erase").onclick=()=>{ctx.fillStyle="white";ctx.fillRect(0,0,pad.width,pad.height);save()};
+el("download").onclick=()=>{save();download({assignment_id:assignment.id,answers},"academy-assignment-"+assignment.id+".json")};
+el("submit").onclick=async()=>{try{save();if(!confirm("Submit this exam and lock your answers?"))return;const receipt=await api("submit_assignment",{assignment_id:assignment.id,answers});localStorage.removeItem(backup());el("receipt").textContent=JSON.stringify(receipt,null,2);el("editor").style.display="none";el("finished").style.display="block";await overview()}catch(e){say(e.message)}};
+el("home").onclick=()=>{el("finished").style.display="none";window.scrollTo({top:0,behavior:"smooth"})};
+})();
+</script></body></html>
