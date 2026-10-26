@@ -25,6 +25,7 @@ export const toolsV2=[
  tool("list_assignments","List assigned and completed assessments (no answer keys)"),
  tool("list_submissions","List recent submission IDs and grading states"),
  tool("get_assessment","Get a student-facing assessment without private correct answers",{assessment_id:str},["assessment_id"]),
+ tool("submit_assignment","Submit written work keyed by question ID for an assigned test",{assignment_id:str,answers:obj},["assignment_id","answers"]),
  tool("get_submission","Get student answers plus review history by submission ID",{submission_id:str},["submission_id"]),
  tool("get_grading_reference","Get frozen answer key, model solutions, scoring rubric and student working for independent grading",{submission_id:str},["submission_id"]),
  tool("grade_submission","Grade full submitted work against the frozen rubric; pass per-question earned_points, feedback and critical_error. Stores evidence, but not automatic course credit.",{submission_id:str,evaluations:{type:"array",items:obj},reviewer:str},["submission_id","evaluations"]),
