@@ -1,3 +1,4 @@
+import {toolsV2,handleAcademic} from "./academic.js";
 // Academy Worker: authenticated single-student exam API and stateless MCP endpoint.
 // Set ACADEMY_TOKEN with 'wrangler secret put ACADEMY_TOKEN' before deploying.
 // Never put that token in GitHub, in URLs, or in exam submissions.
@@ -103,11 +104,12 @@ const definitions=[
 ];
 async function mcp(body,env){
  if(body.method==="notifications/initialized")return null;
- if(body.method==="initialize")return {protocolVersion:"2025-11-25",capabilities:{tools:{}},serverInfo:{name:"mechatronics-academy",version:"0.1.0"}};
+ if(body.method==="initialize")return {protocolVersion:"2025-11-25",capabilities:{tools:{}},serverInfo:{name:"mechatronics-academy",version:"0.2.0"}};
  if(body.method==="ping")return {};
- if(body.method==="tools/list")return {tools:definitions};
+ if(body.method==="tools/list")return {tools:[...definitions,...toolsV2]};
  if(body.method==="tools/call"){
   const p=body.params||{};let data;
+  if(toolsV2.some(t=>t.name===p.name)){ const result=await handleAcademic(env,p.name,p.arguments||{});return {content:[{type:"text",text:JSON.stringify(result)}]}; }
   switch(p.name){
    case "list_exams":data=await api("/api/exams","GET",{},env);break;
    case "get_progress":data=await api("/api/progress","GET",{},env);break;
@@ -133,6 +135,12 @@ export default {async fetch(request,env){
    if(body.method==="notifications/initialized")return new Response(null,{status:202,headers});
    const result=await mcp(body,env);
    return json({jsonrpc:"2.0",id:body.id??null,result},200,headers);
+  }
+  if(url.pathname.startsWith("/api/v2/")){
+   const operation=url.pathname.slice("/api/v2/".length);
+   const body=request.method==="POST"?await request.json():{};
+   if(request.method==="GET"&&!["academic_overview","list_courses","list_assignments"].includes(operation))return json({error:"POST required"},405,headers);
+   return json(await handleAcademic(env,operation,body),200,headers);
   }
   if(!url.pathname.startsWith("/api/"))return json({error:"Not found"},404,headers);
   const body=request.method==="POST"?await request.json():{};

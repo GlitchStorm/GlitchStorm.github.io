@@ -1,0 +1,52 @@
+name: Academy integration checks
+on:
+  pull_request:
+    paths:
+      - "academy/server/**"
+      - "mechatronics-academy/**"
+      - ".github/workflows/academy-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript syntax
+        run: |
+          node --check academy/server/src/index.js
+          node --check academy/server/src/academic.js
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          class Scripts(HTMLParser):
+              def __init__(self): super().__init__(); self.inside=False; self.parts=[]
+              def handle_starttag(self,tag,attrs):
+                  if tag=="script": self.inside=True
+              def handle_endtag(self,tag):
+                  if tag=="script": self.inside=False
+              def handle_data(self,data):
+                  if self.inside:self.parts.append(data)
+          for file in ['mechatronics-academy/index.html','mechatronics-academy/assignments.html']:
+              p=Scripts();p.feed(open(file).read())
+              open('/tmp/'+file.rsplit('/',1)[-1]+'.js','w').write(''.join(p.parts))
+          PY
+          node --check /tmp/assignments.html.js
+          node --check /tmp/index.html.js
+      - name: Apply schema and test catalog seed in SQLite
+        run: |
+          python3 - <<'PY'
+          import sqlite3,glob
+          db=sqlite3.connect(':memory:')
+          for f in sorted(glob.glob('academy/server/migrations/*.sql')):
+              db.executescript(open(f).read())
+          count,total=db.execute('SELECT count(*),sum(credits) FROM academy_courses').fetchone()
+          assert (count,total)==(41,128),(count,total)
+          for course,prs in db.execute('SELECT id,prerequisites_json FROM academy_courses'):
+              import json
+              for pre in json.loads(prs):
+                  assert db.execute('SELECT 1 FROM academy_courses WHERE id=?',(pre,)).fetchone(),(course,pre)
+          print('Database migrations and curriculum validated:',count,total)
+          PY
