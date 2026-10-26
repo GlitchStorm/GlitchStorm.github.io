@@ -152,8 +152,16 @@ export async function handleAcademic(env,operation,a={}){
   let earned=0,total=0,critical=false;const evaluations=[];
   for(const q of exam.questions){
    const e=evaluationMap.get(q.id);if(!e||typeof e.feedback!=="string"||!Number.isFinite(Number(e.earned_points)))bad("Missing or invalid grading for "+q.id);
-   const points=Number(e.earned_points);if(points<0||points>q.points)bad("Points outside rubric for "+q.id);
-   const graded={question_id:q.id,earned_points:points,max_points:q.points,feedback:plain(e.feedback,3000),critical_error:!!e.critical_error};
+   const key=exam.answer_key[q.id];
+   let points=Number(e.earned_points);
+   if(key?.mode==="numeric"){
+     const submitted=parse(x.answers_json,{})[q.id]?.answer;
+     const actual=Number(submitted),correct=Number(key.answer);
+     const tol=Math.max(Number(key.absolute_tolerance||0),Math.abs(correct)*Number(key.relative_tolerance||0));
+     points=String(submitted??"").trim()!==""&&Number.isFinite(actual)&&Math.abs(actual-correct)<=tol?q.points:0;
+   }
+   if(!Number.isFinite(points)||points<0||points>q.points)bad("Points outside rubric for "+q.id);
+   const graded={question_id:q.id,earned_points:points,max_points:q.points,feedback:plain(e.feedback,3000),critical_error:!!e.critical_error,grading_mode:key?.mode||"rubric"};
    critical ||=graded.critical_error;earned+=points;total+=q.points;evaluations.push(graded);
   }
   const percent=Math.round(earned/total*10000)/100,gradedAt=now(),pass=percent>=exam.passing_percent&&!critical;
