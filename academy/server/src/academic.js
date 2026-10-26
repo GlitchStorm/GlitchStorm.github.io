@@ -23,8 +23,10 @@ export const toolsV2=[
  tool("publish_assessment","Freeze an assessment and publish it to the student portal",{assessment_id:str},["assessment_id"]),
  tool("assign_assessment","Assign a published assessment",{assessment_id:str,due_at:str,notes:str},["assessment_id"]),
  tool("list_assignments","List assigned and completed assessments (no answer keys)"),
+ tool("list_submissions","List recent submission IDs and grading states"),
  tool("get_assessment","Get a student-facing assessment without private correct answers",{assessment_id:str},["assessment_id"]),
  tool("get_submission","Get student answers plus review history by submission ID",{submission_id:str},["submission_id"]),
+ tool("get_grading_reference","Get frozen answer key, model solutions, scoring rubric and student working for independent grading",{submission_id:str},["submission_id"]),
  tool("grade_submission","Grade full submitted work against the frozen rubric; pass per-question earned_points, feedback and critical_error. Stores evidence, but not automatic course credit.",{submission_id:str,evaluations:{type:"array",items:obj},reviewer:str},["submission_id","evaluations"]),
  tool("record_learning","Log a lesson, diagnostic, lab, retained skill or remediation with evidence",{event_type:str,course_id:str,unit_id:str,competency_id:str,detail:obj},["event_type","detail"]),
  tool("set_competency_state","Record or correct a competency determination with evidence and reason; no unsupported mastery",{competency_id:str,state:str,percent:{type:"number"},evidence:obj,reason:str,retention_due:str},["competency_id","state","evidence","reason"]),
@@ -111,6 +113,7 @@ export async function handleAcademic(env,operation,a={}){
  }
  case "list_assignments":return select(db,"SELECT a.*,e.title,e.course_id,e.kind FROM academy_assignments a JOIN academy_assessments e ON e.id=a.assessment_id ORDER BY a.assigned_at DESC");
  case "get_assessment":return getAssessment(db,safeId(a.assessment_id));
+ case "list_submissions":return select(db,"SELECT id,assessment_id,assignment_id,status,grade_percent,submitted_at,graded_at FROM academy_submissions ORDER BY submitted_at DESC LIMIT 150");
  case "submit_assignment":{
   const assignment=await one(db,"SELECT * FROM academy_assignments WHERE id=?",safeId(a.assignment_id));
   if(!assignment||assignment.status!=="assigned")bad("Assignment not open");
@@ -133,6 +136,11 @@ export async function handleAcademic(env,operation,a={}){
  case "get_submission":{
   const x=await one(db,"SELECT * FROM academy_submissions WHERE id=?",safeId(a.submission_id));if(!x)bad("Submission missing");
   return {...x,answers:parse(x.answers_json,{}),answers_json:undefined,grade:parse(x.grade_json,null),grade_json:undefined};
+ }
+ case "get_grading_reference":{
+  const x=await one(db,"SELECT * FROM academy_submissions WHERE id=?",safeId(a.submission_id));if(!x)bad("Submission missing");
+  const assessment=await getAssessment(db,x.assessment_id,true);
+  return {submission_id:x.id,assessment,submitted_answers:parse(x.answers_json,{}),status:x.status};
  }
  case "grade_submission":{
   const x=await one(db,"SELECT * FROM academy_submissions WHERE id=?",safeId(a.submission_id));if(!x||x.status!=="submitted")bad("Submission missing or already graded");
