@@ -1,0 +1,40 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mechatronics Academy</title>
+<style>body{font:16px system-ui;background:#101723;color:#f4f6ff;margin:0}header{padding:18px;background:#202a3b}main{max-width:950px;margin:auto;padding:20px}section{background:#202a3b;padding:18px;border-radius:12px;margin:12px 0}input,textarea{display:block;width:100%;box-sizing:border-box;margin:8px 0 15px;padding:12px;font:inherit;background:#111826;color:white;border:1px solid #58627a;border-radius:7px}textarea{min-height:140px}button{font:inherit;background:#4f62b6;color:white;border:0;border-radius:8px;padding:10px 13px;margin:3px;cursor:pointer}button:disabled{opacity:.4}.nav{display:flex;flex-wrap:wrap;gap:2px}.nav button{min-width:42px}.nav .active{outline:2px solid #fff}.nav .done{background:#22745a}.graph{background:white;width:100%;max-width:440px;border-radius:8px}canvas{background:white;width:100%;height:200px;touch-action:none;display:block}.muted{color:#bcc7db;font-size:14px}#questionSection,#receiptSection,#recordSection{display:none}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body>
+<header><strong>Mechatronics Academy — Exam Portal</strong></header><main>
+<section><h2>Connect</h2><p class="muted">Enter your Cloudflare Worker HTTPS URL and private token. Token stays in page memory, never in GitHub or browser storage.</p><label>Worker URL<input id="base" placeholder="https://your-worker.workers.dev"></label><label>Academy token<input id="token" type="password" autocomplete="off"></label><button id="load">Load MTH101 exam</button><button id="progress">View academic record</button><p id="status" role="status"></p></section>
+<section id="questionSection"><h2 id="title"></h2><div class="nav" id="navigation"></div><p id="prompt"></p><div id="graph"></div><label>Final answer<input id="answer" inputmode="decimal"></label><label>Show working<textarea id="work"></textarea></label><label>Handwritten working (stylus / finger / mouse)<canvas id="pad"></canvas></label><button id="clear">Clear drawing</button><div><button id="back">Previous</button><button id="forward">Next</button><button id="backup">Export draft</button><button id="submit">Submit complete exam</button></div></section>
+<section id="receiptSection"><h2>Submission recorded</h2><pre id="receipt"></pre><p class="muted">Numeric answer subtotal is provisional. Method, units and reasoning require independent review before final grading.</p></section>
+<section id="recordSection"><h2>Academic record</h2><pre id="record"></pre></section></main>
+<script>
+(function(){
+"use strict";
+var byId=function(x){return document.getElementById(x)},base="",token="",exam=null,index=0,answers={},painting=false,last=null,canvas=byId("pad"),ctx=canvas.getContext("2d");
+function status(s){byId("status").textContent=s}
+function validate(){base=byId("base").value.trim().replace(/\/+$/,"");var u=new URL(base);if(u.protocol!=="https:"&&u.hostname!=="localhost")throw Error("HTTPS required");token=byId("token").value||token;if(!token)throw Error("Enter a token")}
+async function api(path,method,body){var r=await fetch(base+path,{method:method||"GET",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined});var d=await r.json();if(!r.ok)throw Error(d.error||"Request failed");return d}
+function persist(){try{localStorage.setItem("academy-draft-v1",JSON.stringify({exam_id:exam.id,answers:answers}))}catch(e){status("Local storage unavailable; export a backup.")}}
+function save(){if(!exam)return;var id=exam.questions[index].id;answers[id]={answer:byId("answer").value,work:byId("work").value,drawing:canvas.toDataURL("image/png")};persist()}
+function drawGraph(id){if(id!=="Q09"&&id!=="Q20"){byId("graph").innerHTML="";return}
+var svg='<svg class="graph" viewBox="0 0 440 265" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Linear graph through (2,5) and (6,17)">';
+for(var i=0;i<9;i++)svg+='<path d="M'+(45+45*i)+' 10 V245" stroke="#d7dfea"/>';
+for(var j=0;j<11;j++)svg+='<path d="M45 '+(245-22*j)+' H420" stroke="#d7dfea"/>';
+svg+='<path d="M45 10V245H420" fill="none" stroke="#111" stroke-width="2"/><path d="M45 256 L360 25" stroke="#365ecb" stroke-width="3"/>';
+[[2,5],[6,17]].forEach(function(p){var x=45+p[0]*45,y=245-p[1]*11;svg+='<circle cx="'+x+'" cy="'+y+'" r="5" fill="#b92847"/><text x="'+(x+7)+'" y="'+(y-8)+'" fill="#111" font-size="13">('+p[0]+','+p[1]+')</text>'});
+byId("graph").innerHTML=svg+'</svg>'}
+function resize(){var old=answers[exam.questions[index].id]?.drawing,w=canvas.clientWidth;canvas.width=w*devicePixelRatio;canvas.height=200*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);ctx.fillStyle="white";ctx.fillRect(0,0,w,200);if(old){var img=new Image();img.onload=function(){ctx.drawImage(img,0,0,w,200)};img.src=old}}
+function render(){var item=exam.questions[index];byId("title").textContent="Question "+(index+1)+" / "+exam.questions.length+" — "+item.title;byId("prompt").textContent=item.prompt;drawGraph(item.id);byId("answer").value=answers[item.id]?.answer||"";byId("work").value=answers[item.id]?.work||"";byId("back").disabled=index===0;byId("forward").disabled=index===exam.questions.length-1;
+var nav=byId("navigation");nav.replaceChildren();exam.questions.forEach(function(q,k){var b=document.createElement("button");b.textContent=k+1;b.className=(k===index?"active ":"")+(answers[q.id]?.answer||answers[q.id]?.work?"done":"");b.onclick=function(){navigate(k)};nav.appendChild(b)});requestAnimationFrame(resize)}
+function navigate(i){save();index=i;render()}
+function download(o,name){var a=document.createElement("a"),u=URL.createObjectURL(new Blob([JSON.stringify(o,null,2)],{type:"application/json"}));a.href=u;a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(u)},1000)}
+byId("load").onclick=async function(){try{validate();var exams=await api("/api/exams");exam=exams[0];var local=JSON.parse(localStorage.getItem("academy-draft-v1")||"{}");answers=local.exam_id===exam.id?local.answers||{}:{};byId("token").value="";byId("questionSection").style.display="block";byId("recordSection").style.display="none";status("Connected");render()}catch(e){status(e.message)}};
+byId("progress").onclick=async function(){try{validate();var data=await api("/api/progress");byId("record").textContent=JSON.stringify(data,null,2);byId("recordSection").style.display="block";status("Record retrieved")}catch(e){status(e.message)}};
+byId("answer").oninput=save;byId("work").oninput=save;byId("back").onclick=function(){navigate(Math.max(0,index-1))};byId("forward").onclick=function(){navigate(Math.min(index+1,exam.questions.length-1))};
+function point(e){var r=canvas.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}}
+canvas.onpointerdown=function(e){painting=true;canvas.setPointerCapture(e.pointerId);last=point(e)};
+canvas.onpointermove=function(e){if(!painting)return;var p=point(e);ctx.strokeStyle="#142036";ctx.lineWidth=2.5;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p};
+canvas.onpointerup=function(){painting=false;save()};
+byId("clear").onclick=function(){ctx.fillStyle="white";ctx.fillRect(0,0,canvas.width,canvas.height);save()};
+byId("backup").onclick=function(){save();download({exam_id:exam.id,answers:answers},"academy-draft.json")};
+byId("submit").onclick=async function(){try{save();if(!confirm("Submit and lock all answers?"))return;var receipt=await api("/api/attempts","POST",{exam_id:exam.id,answers:answers});byId("receipt").textContent=JSON.stringify(receipt,null,2);byId("receiptSection").style.display="block";byId("questionSection").style.display="none";localStorage.removeItem("academy-draft-v1");status("Saved to academic database")}catch(e){status(e.message)}};
+})();
+</script></body></html>
