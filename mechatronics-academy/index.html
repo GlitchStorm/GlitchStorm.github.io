@@ -18,7 +18,7 @@ function drawGraph(id){if(id!=="Q09"&&id!=="Q20"){byId("graph").innerHTML="";ret
 var svg='<svg class="graph" viewBox="0 0 440 265" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Linear graph through (2,5) and (6,17)">';
 for(var i=0;i<9;i++)svg+='<path d="M'+(45+45*i)+' 10 V245" stroke="#d7dfea"/>';
 for(var j=0;j<11;j++)svg+='<path d="M45 '+(245-22*j)+' H420" stroke="#d7dfea"/>';
-svg+='<path d="M45 10V245H420" fill="none" stroke="#111" stroke-width="2"/><path d="M90 223 L360 157" stroke="#365ecb" stroke-width="3"/>';
+svg+='<path d="M45 10V245H420" fill="none" stroke="#111" stroke-width="2"/><path d="M45 256 L360 25" stroke="#365ecb" stroke-width="3"/>';
 [[2,5],[6,17]].forEach(function(p){var x=45+p[0]*45,y=245-p[1]*11;svg+='<circle cx="'+x+'" cy="'+y+'" r="5" fill="#b92847"/><text x="'+(x+7)+'" y="'+(y-8)+'" fill="#111" font-size="13">('+p[0]+','+p[1]+')</text>'});
 byId("graph").innerHTML=svg+'</svg>'}
 function resize(){var old=answers[exam.questions[index].id]?.drawing,w=canvas.clientWidth;canvas.width=w*devicePixelRatio;canvas.height=200*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);ctx.fillStyle="white";ctx.fillRect(0,0,w,200);if(old){var img=new Image();img.onload=function(){ctx.drawImage(img,0,0,w,200)};img.src=old}}
