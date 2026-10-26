@@ -22,6 +22,10 @@ This folder contains the **first deployable single-student vertical slice** of t
 7. Merge the PR into the GitHub Pages publishing branch (`master` here). The portal should appear at **https://glitchstorm.github.io/mechatronics-academy/** after Pages publishes.
 8. Enter the Worker HTTPS URL and token in the exam portal, load questions, and submit a small test. Submissions are stored in Cloudflare D1, not GitHub.
 
+## Deploy future updates from GitHub Actions
+
+The repository contains `.github/workflows/deploy-academy-worker.yml`. After creating D1, setting the Worker secret, and replacing the D1 ID in `wrangler.toml`, add **GitHub repository secrets** `CLOUDFLARE_API_TOKEN` (a Cloudflare token scoped to deploy Workers) and `CLOUDFLARE_ACCOUNT_ID`. Merging to `master` will then deploy changes under `academy/server/`; manual runs are also available under Actions. This CI workflow **does not automatically apply D1 migrations**. Always run any new database migrations separately. The Academy bearer token remains in Cloudflare Workers secrets and must not be copied into GitHub.
+
 ## Connect to ChatGPT as an MCP server
 
 Set the MCP server endpoint to `https://YOUR-WORKER.workers.dev/mcp` using HTTP Streamable MCP. The server requires the same secret **Authorization: Bearer TOKEN** on every tool call. Configure API-key/bearer authentication in the connector; do not put the token in its public description or URL.
