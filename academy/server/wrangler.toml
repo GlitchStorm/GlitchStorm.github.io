@@ -9,7 +9,7 @@ ALLOWED_ORIGIN = "https://glitchstorm.github.io"
 [[d1_databases]]
 binding = "DB"
 database_name = "academy-db"
-database_id = "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID"
+database_id = "82edd4f4-d5bd-4e8f-87fd-09da376b684c"
 
 [observability]
 enabled = true

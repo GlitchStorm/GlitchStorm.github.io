@@ -125,8 +125,6 @@ export default {async fetch(request,env){
  if(!headers)return json({error:"Origin not permitted"},403);
  if(request.method==="OPTIONS")return new Response(null,{status:204,headers});
  if(url.pathname==="/health")return json({service:"mechatronics-academy",status:"ok"},200,headers);
- const expected=env.ACADEMY_TOKEN;
- if(!expected||request.headers.get("Authorization")!=="Bearer "+expected)return json({error:"Unauthorized"},401,headers);
  try{
   if(url.pathname==="/mcp"){
    if(request.method!=="POST")return json({error:"POST required"},405,headers);
