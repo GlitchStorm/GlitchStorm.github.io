@@ -13,6 +13,11 @@ const run=async(db,q,...v)=>db.prepare(q).bind(...v).run();
 const bad=m=>{throw Error(m)};
 const tool=(name,description,properties={},requiredKeys=[])=>({name,description,inputSchema:{type:"object",properties,required:requiredKeys,additionalProperties:false}});
 const str={type:"string"}, obj={type:"object"},list={type:"array",items:str};
+const EVIDENCE_TYPES=["instruction","guided_practice","independent_practice","transfer","formative_check","remediation","observation"];
+const ASSISTANCE_TYPES=["independent","guided","assisted","unknown"];
+const RESULT_TYPES=["correct","partial","incorrect","not_scored"];
+const PROFICIENCY_STATES=["not_introduced","developing","proficient_in_covered_material","assessment_ready"];
+const enumProp=(values,description)=>({type:"string",enum:values,description});
 export const toolsV2=[
  tool("academic_overview","Get courses, progress, assignments, due retention, and next academically eligible work"),
  tool("list_courses","Get 41-course catalog and prerequisites"),
@@ -36,8 +41,8 @@ export const toolsV2=[
  tool("set_academic_note","Save durable academic preferences, tutor checkpoints or study notes",{key:str,value:obj},["key","value"]),
  tool("list_academic_notes","List ALL saved academic note keys and values, paginated without guessed keys",{limit:{type:"integer"},offset:{type:"integer"}}),
  tool("get_competency_progress","Read formative evidence and current proficiency separately from formal scores/mastery",{competency_id:str,course_id:str}),
- tool("record_proficiency_evidence","Append lesson-level formative evidence without affecting diagnostic scores or formal mastery",{competency_id:str,course_id:str,lesson_id:str,learning_event_id:str,evidence_type:str,assistance:str,result:str,score_earned:{type:"number"},score_possible:{type:"number"},detail:obj},["competency_id","course_id","evidence_type","assistance","result"]),
- tool("set_formative_proficiency","Update qualitative current proficiency and gaps without touching formal mastery percentages",{competency_id:str,proficiency_state:str,covered_concepts:list,unresolved_gaps:list,reason:str},["competency_id","proficiency_state","reason"]),
+ tool("record_proficiency_evidence","Append lesson-level formative evidence without affecting diagnostic scores or formal mastery",{competency_id:str,course_id:str,lesson_id:str,learning_event_id:str,evidence_type:enumProp(EVIDENCE_TYPES,"Type of exercise/observation"),assistance:enumProp(ASSISTANCE_TYPES,"Assistance received"),result:enumProp(RESULT_TYPES,"Observed outcome"),score_earned:{type:"number"},score_possible:{type:"number"},detail:obj},["competency_id","course_id","evidence_type","assistance","result"]),
+ tool("set_formative_proficiency","Update qualitative current proficiency and gaps without touching formal mastery percentages",{competency_id:str,proficiency_state:enumProp(PROFICIENCY_STATES,"Formative proficiency classification"),covered_concepts:list,unresolved_gaps:list,reason:str},["competency_id","proficiency_state","reason"]),
  tool("get_academic_note","Read a durable note",{key:str},["key"])
 ];
 async function event(db,event_type,course_id,unit_id,competency_id,detail){await run(db,"INSERT INTO academy_learning_log VALUES(?,?,?,?,?,?,?)",uuid(),course_id||null,unit_id||null,competency_id||null,event_type,JSON.stringify(detail),now())}
@@ -296,9 +301,11 @@ export async function handleAcademic(env,operation,a={}){
   const id=safeId(a.competency_id),row=await one(db,"SELECT id,course_id FROM academy_competencies WHERE id=?",id);
   if(!row)bad("Competency missing");
   const course=safeId(a.course_id);if(row.course_id!==course)bad("Competency does not belong to specified course");
-  const types=["instruction","guided_practice","independent_practice","transfer","formative_check","remediation","observation"];
-  const assistanceLevels=["independent","guided","assisted","unknown"],outcomes=["correct","partial","incorrect","not_scored"];
-  if(!types.includes(a.evidence_type)||!assistanceLevels.includes(a.assistance)||!outcomes.includes(a.result))bad("Invalid formative evidence classification");
+  const types=EVIDENCE_TYPES;
+  const assistanceLevels=ASSISTANCE_TYPES,outcomes=RESULT_TYPES;
+  if(!types.includes(a.evidence_type))bad("Invalid evidence_type "+JSON.stringify(a.evidence_type)+". Allowed: "+types.join(", "));
+  if(!assistanceLevels.includes(a.assistance))bad("Invalid assistance "+JSON.stringify(a.assistance)+". Allowed: "+assistanceLevels.join(", "));
+  if(!outcomes.includes(a.result))bad("Invalid result "+JSON.stringify(a.result)+". Allowed: "+outcomes.join(", "));
   const earned=a.score_earned===undefined?null:Number(a.score_earned),possible=a.score_possible===undefined?null:Number(a.score_possible);
   if((earned!==null||possible!==null)&&(!Number.isFinite(earned)||!Number.isFinite(possible)||possible<=0||earned<0||earned>possible))bad("Score must have valid earned and possible points");
   if(a.learning_event_id){const source=await one(db,"SELECT course_id,competency_id FROM academy_learning_log WHERE id=?",a.learning_event_id);if(!source)bad("Referenced learning event does not exist");if(source.course_id&&source.course_id!==course)bad("Learning event belongs to a different course");if(source.competency_id&&source.competency_id!==id)bad("Learning event belongs to a different competency");}
@@ -310,8 +317,8 @@ export async function handleAcademic(env,operation,a={}){
  }
  case "set_formative_proficiency":{
   const id=safeId(a.competency_id),row=await one(db,"SELECT id FROM academy_competencies WHERE id=?",id);if(!row)bad("Competency missing");
-  const states=["not_introduced","developing","proficient_in_covered_material","assessment_ready"];
-  if(!states.includes(a.proficiency_state))bad("Invalid proficiency state");
+  const states=PROFICIENCY_STATES;
+  if(!states.includes(a.proficiency_state))bad("Invalid proficiency_state. Allowed: "+states.join(", "));
   if(!plain(a.reason).trim())bad("Reason required");
   if(["proficient_in_covered_material","assessment_ready"].includes(a.proficiency_state)){const proof=await one(db,"SELECT COUNT(*) AS n FROM academy_formative_evidence WHERE competency_id=? AND assistance='independent' AND result='correct'",id);if(!proof?.n)bad("Proficient or assessment-ready status requires at least one correct independent exercise recorded as formative evidence");}
   const concepts=arr(a.covered_concepts).map(x=>plain(x,500)),gaps=arr(a.unresolved_gaps).map(x=>plain(x,500)),stamp=now();
