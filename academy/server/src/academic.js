@@ -81,12 +81,14 @@ export async function handleAcademic(env,operation,a={}){
  case "academic_record":{
   // Read-only student transcript view. Never mutate academic state here.
   const overview=await summary(db);
-  const [units,events,notes,legacyAttempts,legacyCompetencies]=await Promise.all([
+  const [units,events,notes,legacyAttempts,legacyCompetencies,proficiencies,evidences]=await Promise.all([
     select(db,"SELECT * FROM academy_units ORDER BY course_id,seq"),
     select(db,"SELECT * FROM academy_learning_log ORDER BY recorded_at DESC LIMIT 1000"),
     select(db,"SELECT key,value_json,updated_at FROM academy_kv ORDER BY key"),
     select(db,"SELECT id,exam_id,score,max_score,state,submitted_at,reviewed_at,review_json FROM attempts ORDER BY submitted_at DESC LIMIT 100"),
-    select(db,"SELECT * FROM competencies ORDER BY course_id,id")
+    select(db,"SELECT * FROM competencies ORDER BY course_id,id"),
+    select(db,"SELECT * FROM academy_formative_proficiency ORDER BY competency_id"),
+    select(db,"SELECT * FROM academy_formative_evidence ORDER BY recorded_at DESC LIMIT 1000")
   ]);
   const eligible=new Set(overview.next_eligible);
   return {
@@ -95,6 +97,8 @@ export async function handleAcademic(env,operation,a={}){
     units:units.map(u=>({...u,prerequisites:parse(u.prerequisites_json,[]),objectives:parse(u.objectives_json,[]),prerequisites_json:undefined,objectives_json:undefined})),
     learning_events:events.map(e=>({...e,detail:parse(e.detail_json,{}),detail_json:undefined})),
     notes:notes.map(n=>({key:n.key,value:parse(n.value_json,{}),updated_at:n.updated_at})),
+    formative_proficiency:proficiencies.map(p=>({...p,covered_concepts:parse(p.covered_concepts_json,[]),unresolved_gaps:parse(p.unresolved_gaps_json,[]),covered_concepts_json:undefined,unresolved_gaps_json:undefined})),
+    formative_evidence:evidences.map(e=>({...e,detail:parse(e.detail_json,{}),detail_json:undefined})),
     legacy:{attempts:legacyAttempts.map(a=>({...a,review:parse(a.review_json,null),review_json:undefined})),competencies:legacyCompetencies},
     exported_at:now(),read_only:true
   };
