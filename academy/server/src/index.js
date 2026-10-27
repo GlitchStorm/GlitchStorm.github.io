@@ -139,7 +139,7 @@ export default {async fetch(request,env){
   if(url.pathname.startsWith("/api/v2/")){
    const operation=url.pathname.slice("/api/v2/".length);
    const body=request.method==="POST"?await request.json():{};
-   if(request.method==="GET"&&!["academic_overview","list_courses","list_assignments"].includes(operation))return json({error:"POST required"},405,headers);
+   if(request.method==="GET"&&!["academic_overview","academic_record","list_courses","list_assignments"].includes(operation))return json({error:"POST required"},405,headers);
    return json(await handleAcademic(env,operation,body),200,headers);
   }
   if(!url.pathname.startsWith("/api/"))return json({error:"Not found"},404,headers);
