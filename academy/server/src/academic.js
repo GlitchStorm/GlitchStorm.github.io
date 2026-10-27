@@ -34,6 +34,10 @@ export const toolsV2=[
  tool("set_course_state","Record course state after checking prerequisites and demonstrated mastery",{course_id:str,state:str,reason:str},["course_id","state","reason"]),
  tool("get_learning_history","Read dated learning evidence, misconceptions and grading events",{course_id:str,limit:{type:"integer"}}),
  tool("set_academic_note","Save durable academic preferences, tutor checkpoints or study notes",{key:str,value:obj},["key","value"]),
+ tool("list_academic_notes","List ALL saved academic note keys and values, paginated without guessed keys",{limit:{type:"integer"},offset:{type:"integer"}}),
+ tool("get_competency_progress","Read formative evidence, current proficiency, formal mastery and original baseline separately",{competency_id:str,course_id:str}),
+ tool("record_proficiency_evidence","Append lesson-level formative evidence without affecting diagnostic scores or formal mastery",{competency_id:str,course_id:str,lesson_id:str,learning_event_id:str,evidence_type:str,assistance:str,result:str,score_earned:{type:"number"},score_possible:{type:"number"},detail:obj},["competency_id","course_id","evidence_type","assistance","result"]),
+ tool("set_formative_proficiency","Update qualitative current proficiency and gaps without touching formal mastery percentages",{competency_id:str,proficiency_state:str,covered_concepts:list,unresolved_gaps:list,reason:str},["competency_id","proficiency_state","reason"]),
  tool("get_academic_note","Read a durable note",{key:str},["key"])
 ];
 async function event(db,event_type,course_id,unit_id,competency_id,detail){await run(db,"INSERT INTO academy_learning_log VALUES(?,?,?,?,?,?,?)",uuid(),course_id||null,unit_id||null,competency_id||null,event_type,JSON.stringify(detail),now())}
@@ -260,6 +264,55 @@ export async function handleAcademic(env,operation,a={}){
   const key=safeId(a.key),value=object(a.value)?a.value:{value:a.value};
   await run(db,"INSERT INTO academy_kv VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",key,JSON.stringify(value),now());
   return {key,saved:true};
+ }
+ case "list_academic_notes":{
+  const limit=Math.min(250,Math.max(1,Number(a.limit||100))),offset=Math.max(0,Number(a.offset||0));
+  if(!Number.isInteger(limit)||!Number.isInteger(offset))bad("Invalid pagination");
+  const entries=await select(db,"SELECT key,value_json,updated_at FROM academy_kv ORDER BY key LIMIT ? OFFSET ?",limit,offset);
+  const count=await one(db,"SELECT COUNT(*) AS n FROM academy_kv");
+  return {notes:entries.map(x=>({key:x.key,value:parse(x.value_json,{}),updated_at:x.updated_at})),total:count.n,limit,offset,next_offset:offset+entries.length<count.n?offset+entries.length:null};
+ }
+ case "get_competency_progress":{
+  const cid=a.competency_id?safeId(a.competency_id):null,course=a.course_id?safeId(a.course_id):null;
+  if(!cid&&!course)bad("Specify competency_id or course_id");
+  const rows=cid?await select(db,"SELECT * FROM academy_competencies WHERE id=?",cid):await select(db,"SELECT * FROM academy_competencies WHERE course_id=? ORDER BY id",course);
+  const results=[];
+  for(const competency of rows){
+   const p=await one(db,"SELECT * FROM academy_formative_proficiency WHERE competency_id=?",competency.id);
+   const evidence=await select(db,"SELECT * FROM academy_formative_evidence WHERE competency_id=? ORDER BY recorded_at DESC LIMIT 250",competency.id);
+   results.push({
+     competency_id:competency.id,course_id:competency.course_id,title:competency.title,
+     formal:{mastery_state:competency.mastery_state,best_percent:competency.best_percent,latest_percent:competency.latest_percent,retention_due:competency.retention_due,evidence:parse(competency.evidence_json,[])},
+     formative:{proficiency_state:p?.proficiency_state||"not_introduced",covered_concepts:parse(p?.covered_concepts_json,[]),unresolved_gaps:parse(p?.unresolved_gaps_json,[]),last_demonstrated_at:p?.last_demonstrated_at||null,updated_at:p?.updated_at||null,evidence:evidence.map(e=>({...e,detail:parse(e.detail_json,{}),detail_json:undefined}))}
+   });
+  }
+  return {competencies:results};
+ }
+ case "record_proficiency_evidence":{
+  const id=safeId(a.competency_id),row=await one(db,"SELECT id,course_id FROM academy_competencies WHERE id=?",id);
+  if(!row)bad("Competency missing");
+  const course=safeId(a.course_id);if(row.course_id!==course)bad("Competency does not belong to specified course");
+  const types=["instruction","guided_practice","independent_practice","transfer","formative_check","remediation","observation"];
+  const assistanceLevels=["independent","guided","assisted","unknown"],outcomes=["correct","partial","incorrect","not_scored"];
+  if(!types.includes(a.evidence_type)||!assistanceLevels.includes(a.assistance)||!outcomes.includes(a.result))bad("Invalid formative evidence classification");
+  const earned=a.score_earned===undefined?null:Number(a.score_earned),possible=a.score_possible===undefined?null:Number(a.score_possible);
+  if((earned!==null||possible!==null)&&(!Number.isFinite(earned)||!Number.isFinite(possible)||possible<=0||earned<0||earned>possible))bad("Score must have valid earned and possible points");
+  if(a.learning_event_id&&!(await one(db,"SELECT id FROM academy_learning_log WHERE id=?",a.learning_event_id)))bad("Referenced learning event does not exist");
+  const eid=uuid(),stamp=now();
+  await run(db,"INSERT INTO academy_formative_evidence(id,competency_id,course_id,lesson_id,learning_event_id,evidence_type,assistance,result,score_earned,score_possible,detail_json,recorded_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",eid,id,course,a.lesson_id||null,a.learning_event_id||null,a.evidence_type,a.assistance,a.result,earned,possible,JSON.stringify(object(a.detail)?a.detail:{}),stamp);
+  // Do not infer mastery or assign numeric proficiency from guided exercises.
+  await run(db,"INSERT INTO academy_formative_proficiency(competency_id,updated_at,last_demonstrated_at) VALUES(?,?,?) ON CONFLICT(competency_id) DO UPDATE SET last_demonstrated_at=excluded.last_demonstrated_at,updated_at=excluded.updated_at",id,stamp,stamp);
+  return {id:eid,competency_id:id,recorded_at:stamp,saved:true,formal_mastery_unchanged:true};
+ }
+ case "set_formative_proficiency":{
+  const id=safeId(a.competency_id),row=await one(db,"SELECT id FROM academy_competencies WHERE id=?",id);if(!row)bad("Competency missing");
+  const states=["not_introduced","developing","proficient_in_covered_material","assessment_ready"];
+  if(!states.includes(a.proficiency_state))bad("Invalid proficiency state");
+  if(!plain(a.reason).trim())bad("Reason required");
+  const concepts=arr(a.covered_concepts).map(x=>plain(x,500)),gaps=arr(a.unresolved_gaps).map(x=>plain(x,500)),stamp=now();
+  await run(db,"INSERT INTO academy_formative_proficiency(competency_id,proficiency_state,covered_concepts_json,unresolved_gaps_json,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(competency_id) DO UPDATE SET proficiency_state=excluded.proficiency_state,covered_concepts_json=excluded.covered_concepts_json,unresolved_gaps_json=excluded.unresolved_gaps_json,updated_at=excluded.updated_at",id,a.proficiency_state,JSON.stringify(concepts),JSON.stringify(gaps),stamp);
+  await event(db,"formative_proficiency",null,null,id,{state:a.proficiency_state,reason:plain(a.reason,2000),covered_concepts:concepts,unresolved_gaps:gaps});
+  return {competency_id:id,proficiency_state:a.proficiency_state,saved:true,formal_mastery_unchanged:true};
  }
  case "get_academic_note":{
   const x=await one(db,"SELECT * FROM academy_kv WHERE key=?",safeId(a.key));
