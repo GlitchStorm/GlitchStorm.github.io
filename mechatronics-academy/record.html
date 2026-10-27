@@ -80,10 +80,12 @@ function renderCourses(r){
 }
 function renderCompetencies(r){
  const out=$("competencies");clear(out);
+ const formativeById=new Map((r.formative_proficiency||[]).map(p=>[p.competency_id,p]));const evidenceById=new Map();for(const ev of r.formative_evidence||[]){const v=evidenceById.get(ev.competency_id)||[];v.push(ev);evidenceById.set(ev.competency_id,v)}
  if(!r.competencies.length){empty(out,"No competency definitions have been saved yet.");return}
  for(const c of r.competencies){
   const wrap=mk("div",null,out,"course");mk("strong",c.id+" · "+(c.title||""),wrap);
   mk("div",c.course_id+" · "+c.mastery_state+" · best "+Number(c.best_percent||0).toFixed(1)+"%",wrap,"muted");
+  const p=formativeById.get(c.id);mk("div","Formative proficiency: "+(p?p.proficiency_state.replaceAll("_"," "):"not recorded"),wrap,"muted");if(p){if(p.covered_concepts?.length)mk("small","Covered: "+p.covered_concepts.join("; "),wrap);if(p.unresolved_gaps?.length)mk("small","Gaps: "+p.unresolved_gaps.join("; "),wrap)}const fe=evidenceById.get(c.id)||[];if(fe.length)details(wrap,"Formative evidence ("+fe.length+")",fe);
   if(c.retention_due)mk("small","Retention due: "+date(c.retention_due),wrap);
   const d=details(wrap,"Review evidence ("+(c.evidence||[]).length+")",c.evidence||[]);
  }
