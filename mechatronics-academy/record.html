@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mechatronics Academy · Academic Record</title>
+<style>
+:root{color-scheme:dark;--bg:#0e1521;--surface:#1b2637;--surface2:#152031;--edge:#36445b;--ink:#eff4fb;--muted:#b4c2d6;--accent:#91a8ff}
+*{box-sizing:border-box}body{background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,sans-serif;margin:0}
+header{padding:16px 24px;background:var(--surface);border-bottom:1px solid var(--edge);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header a,a{color:var(--accent)}h1{font-size:1.3rem;margin:0}h2{font-size:1.12rem;margin:0 0 10px}h3{font-size:1rem;margin:0 0 6px}
+main{max-width:1200px;margin:auto;padding:18px}.panel{padding:18px;border-radius:12px;background:var(--surface);border:1px solid var(--edge);margin-bottom:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.metric{background:var(--surface2);padding:14px;border:1px solid var(--edge);border-radius:9px}
+.big{font-size:1.6rem;font-weight:700}.muted,small{color:var(--muted)}small{font-size:.85rem}
+input,button,select{font:inherit;border-radius:7px;padding:9px 12px}input,select{background:var(--surface2);color:white;border:1px solid var(--edge)}input{width:min(100%,620px)}
+button{background:#3b4b74;color:white;border:1px solid #586ba1;cursor:pointer}button:hover{background:#4c6192}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+nav button[aria-selected=true]{background:#5971c6}.hidden{display:none}.course{padding:12px;border:1px solid var(--edge);border-radius:9px;background:var(--surface2)}
+.chip{display:inline-block;border:1px solid var(--edge);padding:2px 8px;border-radius:100px;font-size:.8rem;margin:4px 3px 0 0}
+.progress{height:7px;border-radius:5px;background:#37425b;overflow:hidden;margin-top:9px}.progress i{display:block;height:100%;background:#8197fb}
+details{border:1px solid var(--edge);border-radius:8px;margin:8px 0;padding:11px;background:var(--surface2)}
+summary{cursor:pointer;font-weight:600}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem}
+table{border-collapse:collapse;width:100%}td,th{padding:10px;border-bottom:1px solid var(--edge);text-align:left;vertical-align:top}td{overflow-wrap:anywhere}
+#status{margin:6px 0 0}.empty{color:var(--muted);padding:8px}
+@media(max-width:680px){main{padding:10px}header{padding:14px}td,th{padding:7px;font-size:.88rem}}
+</style></head><body>
+<header><h1>Mechatronics Academy · Academic Record</h1><a href="./assignments.html">Assignments</a><a href="./index.html">Legacy exam</a><small>Read-only academic transcript</small></header>
+<main>
+<section class="panel"><h2>Connect to your academy</h2><div class="controls"><input id="host" aria-label="Cloudflare Worker base URL" placeholder="https://your-worker.workers.dev"><button id="load">Load record</button><button id="export" disabled>Export JSON</button></div><p id="status" role="status" class="muted">The dashboard only reads saved records. It does not change course states, notes, tests, or grades.</p></section>
+<div id="results" class="hidden">
+<section class="panel"><h2>At a glance</h2><div id="metrics" class="grid"></div></section>
+<nav aria-label="Record sections" id="tabs">
+<button data-tab="courses" aria-selected="true">Courses</button>
+<button data-tab="competencies" aria-selected="false">Competencies</button>
+<button data-tab="history" aria-selected="false">Lesson history</button>
+<button data-tab="exams" aria-selected="false">Exams & grades</button>
+<button data-tab="notes" aria-selected="false">Tutor notes</button>
+</nav>
+<section class="panel" id="view-courses"><h2>Degree plan and progression</h2><p class="muted">Eligibility is derived from prerequisites. Learning activity is inferred from recorded lessons if course status was not updated; that inference never awards credit.</p><div id="courses"></div></section>
+<section class="panel hidden" id="view-competencies"><h2>Competency progress</h2><div id="competencies"></div></section>
+<section class="panel hidden" id="view-history"><h2>Learning log</h2><div id="history"></div></section>
+<section class="panel hidden" id="view-exams"><h2>Assessments & grades</h2><div id="exams"></div></section>
+<section class="panel hidden" id="view-notes"><h2>Saved tutor notes and checkpoints</h2><div id="notes"></div></section>
+</div>
+</main><script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id),mk=(tag,text,parent,cls)=>{const e=document.createElement(tag);if(text!==null&&text!==undefined)e.textContent=String(text);if(cls)e.className=cls;if(parent)parent.appendChild(e);return e};
+const clear=x=>x.replaceChildren(),formatted=x=>{try{return JSON.stringify(x,null,2)}catch{return String(x)}};
+let record=null;
+const date=x=>{if(!x)return"—";const d=new Date(x);return Number.isNaN(d.getTime())?x:d.toLocaleString()};
+function details(parent,label,value){const d=mk("details",null,parent),h=mk("summary",label,d);mk("pre",formatted(value),d);return d}
+function empty(el,message){mk("p",message,el,"empty")}
+function renderMetrics(r){
+ const out=$("metrics");clear(out);
+ const completed=r.courses.filter(c=>c.status==="mastered").length;
+ const lessons=r.learning_events.filter(e=>/(lesson|practice|unit|lab|studio)/i.test(e.event_type)).length;
+ const metrics=[["Modeled credits",r.credits_mastered+" / 128"],["Completed courses",completed+" / "+r.courses.length],["Recorded competencies",r.competencies.length],["Learning events",r.learning_events.length],["Recent submissions",r.submissions.length],["Retention checks due",r.retention_due.length]];
+ for(const [label,value]of metrics){const m=mk("div",null,out,"metric");mk("div",value,m,"big");mk("div",label,m,"muted")}
+ const p=mk("div",null,out,"metric");mk("div","Learning activity",p,"muted");mk("div",lessons+" logged",p,"big");
+}
+function renderCourses(r){
+ const out=$("courses");clear(out);
+ const byTerm={};for(const c of r.courses)(byTerm[c.term]??=[]).push(c);
+ const completed=new Set(r.courses.filter(c=>c.status==="mastered").map(c=>c.id));
+ const activity=new Set(r.learning_events.filter(e=>e.course_id&&/(lesson|practice|unit|lab|studio|remediation|course_started|learning)/i.test(e.event_type)).map(e=>e.course_id));
+ for(const term of Object.keys(byTerm).sort((a,b)=>Number(a)-Number(b))){
+  mk("h3","Term "+term,out);const grid=mk("div",null,out,"grid");
+  for(const c of byTerm[term]){
+   const card=mk("article",null,grid,"course");
+   mk("strong",c.id+" · "+c.title,card);
+   const prerequisites=Array.isArray(c.prerequisites)?c.prerequisites:[];
+   const eligible=prerequisites.every(p=>completed.has(p));
+   let state=c.status;
+   if(state==="locked"&&eligible)state=activity.has(c.id)?"Learning (recorded lessons)":"Eligible";
+   const line=mk("div",null,card);mk("span",state,line,"chip");mk("span",c.credits+" modeled credits",line,"chip");
+   if(prerequisites.length)mk("small","Prerequisites: "+prerequisites.join(", "),card);
+   const related=r.competencies.filter(x=>x.course_id===c.id);
+   const mastered=related.filter(x=>x.mastery_state==="mastered").length;
+   if(related.length){mk("small",mastered+" / "+related.length+" competencies mastered",card);const bar=mk("div",null,card,"progress");const fill=mk("i",null,bar);fill.style.width=(mastered/related.length*100).toFixed(0)+"%"}
+   else mk("small","No competency definitions stored yet",card);
+  }
+ }
+}
+function renderCompetencies(r){
+ const out=$("competencies");clear(out);
+ if(!r.competencies.length){empty(out,"No competency definitions have been saved yet.");return}
+ for(const c of r.competencies){
+  const wrap=mk("div",null,out,"course");mk("strong",c.id+" · "+(c.title||""),wrap);
+  mk("div",c.course_id+" · "+c.mastery_state+" · best "+Number(c.best_percent||0).toFixed(1)+"%",wrap,"muted");
+  if(c.retention_due)mk("small","Retention due: "+date(c.retention_due),wrap);
+  const d=details(wrap,"Review evidence ("+(c.evidence||[]).length+")",c.evidence||[]);
+ }
+}
+function renderHistory(r){
+ const out=$("history");clear(out);
+ if(!r.learning_events.length){empty(out,"No lesson, practice, or academic events have been recorded.");return}
+ for(const e of r.learning_events){
+  const d=details(out,date(e.recorded_at)+" · "+e.event_type+(e.course_id?" · "+e.course_id:""),e.detail);
+  if(e.unit_id)mk("small","Unit: "+e.unit_id,d);
+ }
+ if(r.learning_events.length>=1000)mk("p","Showing the most recent 1,000 events.",out,"muted");
+}
+function renderExams(r){
+ const out=$("exams");clear(out);
+ const all=[...(r.submissions||[]).map(x=>({...x,source:"Academic engine"})),...((r.legacy?.attempts)||[]).map(x=>({...x,source:"Legacy MTH101"}))];
+ if(!all.length){empty(out,"No assessments have been submitted.");return}
+ all.sort((a,b)=>String(b.submitted_at||"").localeCompare(String(a.submitted_at||"")));
+ for(const x of all){
+  const name=x.assessment_id||x.exam_id||"Assessment",graded=x.status==="graded"||x.state==="reviewed";
+  details(out,date(x.submitted_at)+" · "+name+" · "+(graded?"Reviewed":"Pending")+" · "+(x.grade_percent!=null?x.grade_percent+"%":x.score!=null?x.score+"/"+x.max_score+" (may be provisional)":"No grade"),x);
+ }
+ if(r.assignments.length){mk("h3","Assignment history",out);for(const a of r.assignments)details(out,(a.title||a.assessment_id)+" · "+a.status,a)}
+}
+function renderNotes(r){
+ const out=$("notes");clear(out);
+ if(!r.notes.length){empty(out,"No persistent notes or tutor checkpoints have been saved.");return}
+ for(const n of r.notes)details(out,n.key+" · updated "+date(n.updated_at),n.value);
+}
+function display(r){
+ renderMetrics(r);renderCourses(r);renderCompetencies(r);renderHistory(r);renderExams(r);renderNotes(r);
+ $("results").classList.remove("hidden");$("export").disabled=false;
+}
+const showTab=tab=>{for(const b of $("tabs").querySelectorAll("button"))b.setAttribute("aria-selected",String(b.dataset.tab===tab));for(const section of ["courses","competencies","history","exams","notes"])$("view-"+section).classList.toggle("hidden",section!==tab)};
+for(const b of $("tabs").querySelectorAll("button"))b.onclick=()=>showTab(b.dataset.tab);
+$("host").value=localStorage.getItem("academy-worker-url")||"";
+$("load").onclick=async()=>{
+ try{
+  const raw=$("host").value.trim(),u=new URL(raw);
+  if(u.protocol!=="https:"&&!["localhost","127.0.0.1"].includes(u.hostname))throw Error("HTTPS Worker URL required");
+  const base=u.origin+u.pathname.replace(/\/+$/,"");
+  $("status").textContent="Loading saved records...";
+  const response=await fetch(base+"/api/v2/academic_record",{method:"GET",cache:"no-store"});
+  const data=await response.json();if(!response.ok)throw Error(data.error||"Server request failed");
+  if(!data.read_only||!Array.isArray(data.courses))throw Error("Unexpected academic-record response. Confirm the new Worker is deployed.");
+  record=data;localStorage.setItem("academy-worker-url",base);display(data);
+  $("status").textContent="Loaded at "+date(data.exported_at)+". No records modified.";
+ }catch(e){$("status").textContent="Could not load record: "+e.message}
+};
+$("export").onclick=()=>{
+ if(!record)return;
+ const blob=new Blob([formatted(record)],{type:"application/json"}),url=URL.createObjectURL(blob),a=mk("a",null,null);
+ a.href=url;a.download="mechatronics-academic-record.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+})();
+</script></body></html>

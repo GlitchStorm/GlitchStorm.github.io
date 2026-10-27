@@ -29,12 +29,13 @@ jobs:
                   if tag=="script": self.inside=False
               def handle_data(self,data):
                   if self.inside:self.parts.append(data)
-          for file in ['mechatronics-academy/index.html','mechatronics-academy/assignments.html']:
+          for file in ['mechatronics-academy/index.html','mechatronics-academy/assignments.html','mechatronics-academy/record.html']:
               p=Scripts();p.feed(open(file).read())
               open('/tmp/'+file.rsplit('/',1)[-1]+'.js','w').write(''.join(p.parts))
           PY
           node --check /tmp/assignments.html.js
           node --check /tmp/index.html.js
+          node --check /tmp/record.html.js
       - name: Apply schema and test catalog seed in SQLite
         run: |
           python3 - <<'PY'

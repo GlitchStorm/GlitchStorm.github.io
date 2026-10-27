@@ -74,6 +74,27 @@ export async function handleAcademic(env,operation,a={}){
  const db=env.DB;
  switch(operation){
  case "academic_overview":return summary(db);
+ case "academic_record":{
+  // Read-only student transcript view. Never mutate academic state here.
+  const overview=await summary(db);
+  const [units,events,notes,legacyAttempts,legacyCompetencies]=await Promise.all([
+    select(db,"SELECT * FROM academy_units ORDER BY course_id,seq"),
+    select(db,"SELECT * FROM academy_learning_log ORDER BY recorded_at DESC LIMIT 1000"),
+    select(db,"SELECT key,value_json,updated_at FROM academy_kv ORDER BY key"),
+    select(db,"SELECT id,exam_id,score,max_score,state,submitted_at,reviewed_at,review_json FROM attempts ORDER BY submitted_at DESC LIMIT 100"),
+    select(db,"SELECT * FROM competencies ORDER BY course_id,id")
+  ]);
+  const eligible=new Set(overview.next_eligible);
+  return {
+    ...overview,
+    courses:overview.courses.map(c=>({...c,effective_status:c.status==="locked"&&eligible.has(c.id)?"eligible":c.status})),
+    units:units.map(u=>({...u,prerequisites:parse(u.prerequisites_json,[]),objectives:parse(u.objectives_json,[]),prerequisites_json:undefined,objectives_json:undefined})),
+    learning_events:events.map(e=>({...e,detail:parse(e.detail_json,{}),detail_json:undefined})),
+    notes:notes.map(n=>({key:n.key,value:parse(n.value_json,{}),updated_at:n.updated_at})),
+    legacy:{attempts:legacyAttempts.map(a=>({...a,review:parse(a.review_json,null),review_json:undefined})),competencies:legacyCompetencies},
+    exported_at:now(),read_only:true
+  };
+ }
  case "list_courses":return courses(db);
  case "upsert_course":{
   const id=safeId(a.id),title=required(a.title,"title"),pre=arr(a.prerequisites).map(safeId);
@@ -182,8 +203,26 @@ export async function handleAcademic(env,operation,a={}){
   return {submission_id:x.id,...result,notice:"Grades are recorded as evidence, not automatic course mastery."};
  }
  case "record_learning":{
-  await event(db,required(a.event_type,"event_type"),a.course_id,a.unit_id,a.competency_id,object(a.detail)?a.detail:{note:plain(a.detail)});
-  return {saved:true};
+  const type=required(a.event_type,"event_type"),cid=a.course_id?safeId(a.course_id):null;
+  let state_change=null;
+  if(cid){
+    const course=await one(db,"SELECT id,status,prerequisites_json FROM academy_courses WHERE id=?",cid);
+    if(!course)bad("Course missing");
+    // Lesson/activity evidence transitions a course from locked to learning,
+    // provided its prerequisites are mastered. Diagnostics are still just evidence.
+    const lessonEvent=/^(lesson|practice|unit|lab|studio|course_started|learning|remediation|guided_|independent_)/i.test(type);
+    if(lessonEvent&&["locked","eligible"].includes(course.status)){
+      for(const prerequisite of parse(course.prerequisites_json,[])){
+        const p=await one(db,"SELECT status FROM academy_courses WHERE id=?",prerequisite);
+        if(!p||p.status!=="mastered")bad("Cannot start course: unmastered prerequisite "+prerequisite);
+      }
+      await run(db,"UPDATE academy_courses SET status='learning',updated_at=? WHERE id=? AND status IN ('locked','eligible')",now(),cid);
+      state_change="learning";
+      await event(db,"course_state",cid,null,null,{state:"learning",reason:"Automatically started upon recorded lesson or learning activity"});
+    }
+  }
+  await event(db,type,cid,a.unit_id,a.competency_id,object(a.detail)?a.detail:{note:plain(a.detail)});
+  return {saved:true,course_state_change:state_change};
  }
  case "set_competency_state":{
   const id=safeId(a.competency_id),row=await one(db,"SELECT * FROM academy_competencies WHERE id=?",id);if(!row)bad("Competency missing");
@@ -198,17 +237,20 @@ export async function handleAcademic(env,operation,a={}){
  }
  case "set_course_state":{
   const id=safeId(a.course_id),row=await one(db,"SELECT * FROM academy_courses WHERE id=?",id);if(!row)bad("Course missing");
-  const states=["locked","eligible","learning","assessed","mastered"];if(!states.includes(a.state))bad("Invalid course state");
-  if(["eligible","learning","assessed","mastered"].includes(a.state)){
+  const aliases={active:"learning",in_progress:"learning",started:"learning",completed:"mastered"};
+  const requested=plain(a.state,40).toLowerCase(),state=aliases[requested]||requested;
+  const states=["locked","eligible","learning","assessed","mastered"];if(!states.includes(state))bad("Invalid course state; valid: "+states.join(", "));
+  if(!plain(a.reason,3000).trim())bad("Course-state changes require a reason");
+  if(["eligible","learning","assessed","mastered"].includes(state)){
    for(const pre of parse(row.prerequisites_json,[])){const p=await one(db,"SELECT status FROM academy_courses WHERE id=?",pre);if(!p||p.status!=="mastered")bad("Unmastered prerequisite "+pre)}
   }
-  if(a.state==="mastered"){
+  if(state==="mastered"){
    const cs=await select(db,"SELECT id,mastery_state FROM academy_competencies WHERE course_id=?",id);
    if(!cs.length||cs.some(c=>c.mastery_state!=="mastered"))bad("All defined competencies must be independently mastered before course completion");
   }
-  await run(db,"UPDATE academy_courses SET status=?,updated_at=? WHERE id=?",a.state,now(),id);
-  await event(db,"course_state",id,null,null,{state:a.state,reason:plain(a.reason,3000)});
-  return {id,state:a.state};
+  await run(db,"UPDATE academy_courses SET status=?,updated_at=? WHERE id=?",state,now(),id);
+  await event(db,"course_state",id,null,null,{state:state,reason:plain(a.reason,3000)});
+  return {id,state:state};
  }
  case "get_learning_history":{
   const limit=Math.min(200,Math.max(1,Number(a.limit||80)));
