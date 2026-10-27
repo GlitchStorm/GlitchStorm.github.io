@@ -49,5 +49,9 @@ jobs:
               import json
               for pre in json.loads(prs):
                   assert db.execute('SELECT 1 FROM academy_courses WHERE id=?',(pre,)).fetchone(),(course,pre)
+          for table in ('academy_formative_proficiency','academy_formative_evidence'):
+              assert db.execute('SELECT name FROM sqlite_master WHERE type=\'table\' AND name=?',(table,)).fetchone(),table
+          db.execute("INSERT INTO academy_formative_proficiency(competency_id,updated_at) VALUES('MTH101-U01-C01','2026-10-27T00:00:00Z')")
+          assert db.execute("SELECT proficiency_state FROM academy_formative_proficiency WHERE competency_id='MTH101-U01-C01'").fetchone()[0]=='not_introduced'
           print('Database migrations and curriculum validated:',count,total)
           PY
